@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+
+    <!-- 太阳光芒（橙色放射线，新版设计） -->
+    <path
+        android:strokeColor="#FF8A3D"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,12 L54,22 M37,17 L42,26 M71,17 L66,26 M26,29 L34,36 M82,29 L74,36 M21,45 L31,47 M87,45 L77,47"/>
+
+    <!-- 太阳（橙色半圆，自书本后升起） -->
+    <path
+        android:fillColor="#FF8A3D"
+        android:pathData="M38,58 a16,16 0 0,1 32,0 z"/>
+
+    <!-- 打开的书本（深藏青填充，新版设计） -->
+    <path
+        android:fillColor="#1F2937"
+        android:pathData="M20,58 C33,52 47,52 54,58 C61,52 75,52 88,58 L88,88 C75,82 61,82 54,88 C47,82 33,82 20,88 Z"/>
+
+    <!-- 书页高光（左页） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M28,63 C37,60 45,60 50,63 M28,71 C37,68 45,68 50,71 M28,79 C37,76 45,76 50,79"/>
+
+    <!-- 书页高光（右页） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M58,63 C63,60 71,60 80,63 M58,71 C63,68 71,68 80,71 M58,79 C63,76 71,76 80,79"/>
+</vector>
