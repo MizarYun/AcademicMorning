@@ -86,6 +86,38 @@ class CrossrefClient {
         }
     }
 
+    /**
+     * 拉取该期刊最近发表的一批论文日期（按发表时间倒序），用于识别出刊周期。
+     * 失败或无数据时返回空列表。
+     */
+    suspend fun fetchRecentDates(issn: String, rows: Int = 14): List<java.time.LocalDate> =
+        withContext(Dispatchers.IO) {
+            val url = "https://api.crossref.org/journals/$issn/works" +
+                "?sort=published&order=desc&rows=$rows&select=DOI,published"
+            val req = Request.Builder().url(url)
+                .header("User-Agent", "AcademicMorning/1.0 (mailto:academicmorning@example.com)")
+                .build()
+            try {
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext emptyList()
+                    val body = resp.body!!.string()
+                    val items = json.decodeFromString<Response>(body).message?.items
+                        ?: return@withContext emptyList()
+                    items.mapNotNull { w ->
+                        val dp = w.published?.dateParts?.firstOrNull() ?: return@mapNotNull null
+                        if (dp.isEmpty()) return@mapNotNull null
+                        runCatching {
+                            java.time.LocalDate.of(
+                                dp[0], dp.getOrElse(1) { 1 }, dp.getOrElse(2) { 1 }
+                            )
+                        }.getOrNull()
+                    }.distinct().sortedDescending()
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
     /** 去除 Crossref 摘要中的 JATS XML 标签。 */
     private fun stripJats(s: String): String =
         s.replace(Regex("<[^>]+>"), " ")
