@@ -14,8 +14,8 @@ android {
         applicationId = "com.academicmorning.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "2.3.0-beta2.3"
+        versionCode = 8
+        versionName = "2.5.0-beta2.5"
     }
 
     buildTypes {

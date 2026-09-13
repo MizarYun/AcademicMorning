@@ -29,7 +29,7 @@ class MorningFetchWorker(
                 .entries.sortedByDescending { it.value }
                 .map { it.key to it.value }
             val aiEnabled = settings.activeLlmProvider.first() != null ||
-                settings.tmtEnabled.first()
+                settings.activeMtProvider.first() != null
             if (added > 0 || isTest) {
                 NotificationHelper.showMorningNotification(
                     applicationContext, added, counts, aiEnabled, isTest

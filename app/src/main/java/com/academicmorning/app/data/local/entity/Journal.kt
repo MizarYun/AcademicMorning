@@ -14,5 +14,8 @@ data class Journal(
     val sourceRef: String,
     val publisher: String,
     val isFollowed: Boolean = false,
-    val yesterdayCount: Int = 0
+    val yesterdayCount: Int = 0,
+    /** 识别出的出刊周期（天）：7 周刊 / 15 半月刊 / 31 月刊 / 62 双月刊 / 183 半年刊；
+     *  0 = 未识别；-1 = 识别失败或无法识别（不再重试）。 */
+    val freqDays: Int = 0
 )

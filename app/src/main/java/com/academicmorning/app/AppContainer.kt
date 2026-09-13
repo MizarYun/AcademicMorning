@@ -26,7 +26,7 @@ class AppContainer(private val context: Context) {
 
     val database: AppDatabase by lazy {
         Room.databaseBuilder(context, AppDatabase::class.java, "academic_morning.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -35,7 +35,9 @@ class AppContainer(private val context: Context) {
     val keyStore: ApiKeyStore by lazy { ApiKeyStore(context) }
 
     val journalRepository: JournalRepository by lazy { JournalRepository(database, settings) }
-    val paperRepository: PaperRepository by lazy { PaperRepository(database, settings, keyStore, context) }
+    val paperRepository: PaperRepository by lazy {
+        PaperRepository(database, settings, keyStore, context, journalRepository)
+    }
     val statsRepository: StatsRepository by lazy { StatsRepository(database) }
     val aiConfigRepository: AiConfigRepository by lazy { AiConfigRepository(keyStore, settings) }
 

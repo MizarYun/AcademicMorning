@@ -39,6 +39,9 @@ interface PaperDao {
     @Query("SELECT COUNT(*) FROM papers")
     fun totalCount(): Flow<Int>
 
+    @Query("SELECT DISTINCT publishedDate FROM papers WHERE journalIssn = :issn AND publishedDate != '' ORDER BY publishedDate DESC")
+    suspend fun publishedDatesForJournal(issn: String): List<String>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(list: List<Paper>): List<Long>
 

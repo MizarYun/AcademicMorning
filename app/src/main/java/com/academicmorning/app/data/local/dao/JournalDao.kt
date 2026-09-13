@@ -37,6 +37,10 @@ interface JournalDao {
     @Query("SELECT * FROM journals WHERE issn = :issn")
     suspend fun getByIssn(issn: String): Journal?
 
+    /** 缓存识别出的出刊周期（天）。 */
+    @Query("UPDATE journals SET freqDays = :freqDays WHERE issn = :issn")
+    suspend fun updateFreqDays(issn: String, freqDays: Int)
+
     @Query("SELECT COUNT(*) FROM journals")
     suspend fun count(): Int
 }
