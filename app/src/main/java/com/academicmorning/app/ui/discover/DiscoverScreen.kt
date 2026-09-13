@@ -80,6 +80,48 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
 
     val message = MutableStateFlow<String?>(null)
 
+    /** 关注期刊的更新周期标注（issn → 文案）。 */
+    val freqLabels = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /** 期刊类型标注（issn → 周刊/半月刊/月刊/双月刊/半年刊），识别完成后自动出现。 */
+    val typeLabels = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /** 本次会话已尝试过识别的期刊，避免反复请求 Crossref。 */
+    private val detectTried = mutableSetOf<String>()
+
+    init {
+        viewModelScope.launch {
+            repo.followedJournals().collect { list ->
+                val map = mutableMapOf<String, String>()
+                list.forEach { j ->
+                    repo.frequencyLabel(j.issn)?.let { map[j.issn] = it }
+                }
+                freqLabels.value = map
+            }
+        }
+        // 依据当前列表自动识别期刊类型：优先用已缓存的 freqDays；
+        // 未识别的期刊按当前展示顺序惰性识别（每轮最多 10 本，会话内最多 40 本）。
+        viewModelScope.launch {
+            journals.collect { list ->
+                val map = mutableMapOf<String, String>()
+                list.forEach { j ->
+                    com.academicmorning.app.data.repository.JournalRepository
+                        .typeLabelOf(j.freqDays)?.let { map[j.issn] = it }
+                }
+                typeLabels.value = map
+
+                if (detectTried.size < 40) {
+                    val pending = list.filter { it.freqDays == 0 && it.issn !in detectTried }.take(10)
+                    for (j in pending) {
+                        detectTried.add(j.issn)
+                        try { repo.detectFrequency(j.issn) } catch (_: Exception) {}
+                        kotlinx.coroutines.delay(400)
+                    }
+                }
+            }
+        }
+    }
+
     fun toggleFollow(j: Journal) = viewModelScope.launch {
         val ok = repo.setFollowed(j.issn, !j.isFollowed)
         if (!ok) message.value = "关注期刊已达 20 个上限，请先取消部分关注"
@@ -160,9 +202,15 @@ fun DiscoverScreen(vm: DiscoverViewModel = viewModel()) {
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(4.dp))
+            val freqLabels by vm.freqLabels.collectAsStateWithLifecycle()
+            val typeLabels by vm.typeLabels.collectAsStateWithLifecycle()
             LazyColumn {
                 items(journals, key = { it.issn }) { j ->
-                    JournalRow(journal = j) { vm.toggleFollow(j) }
+                    JournalRow(
+                        journal = j,
+                        freqLabel = freqLabels[j.issn],
+                        typeLabel = typeLabels[j.issn]
+                    ) { vm.toggleFollow(j) }
                     Divider(color = AmDivider)
                 }
                 item { Spacer(Modifier.height(24.dp)) }
