@@ -25,6 +25,7 @@ class SettingsManager(private val context: Context) {
         val FOLLOWED_DISCIPLINES = stringPreferencesKey("followed_disciplines")
         val TRANSLATION_ENGINE = stringPreferencesKey("translation_engine")
         val FAVORITE_FOLDERS = stringPreferencesKey("favorite_folders")
+        val ACTIVE_MT = stringPreferencesKey("active_mt_provider")
         fun ifThreshold(discipline: String) = doublePreferencesKey("if_threshold_$discipline")
     }
 
@@ -58,6 +59,17 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setTranslationEngine(v: String) = context.dataStore.edit {
         it[Keys.TRANSLATION_ENGINE] = v
+    }
+
+    /** 激活的机器翻译供应商："tencent_tmt" | "baidu_translate" | null。 */
+    val activeMtProvider: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ACTIVE_MT]
+            // 兼容旧版：未设置但 tmtEnabled=true 时视为腾讯 TMT
+            ?: if (prefs[Keys.TMT_ENABLED] == true) "tencent_tmt" else null
+    }
+
+    suspend fun setActiveMtProvider(v: String?) = context.dataStore.edit {
+        if (v == null) it.remove(Keys.ACTIVE_MT) else it[Keys.ACTIVE_MT] = v
     }
 
     /** 用户创建的收藏夹（可为空收藏夹）。 */
