@@ -151,8 +151,8 @@ fun SettingsScreen(onOpenApiConfig: () -> Unit, vm: SettingsViewModel = viewMode
     }
 
     // 大模型已配置但 TMT 未配置 → 提示配置 TMT 可降低 token 消耗
-    val llmConfigured = providers.any { it.provider != "tencent_tmt" && it.configured }
-    val tmtConfigured = providers.any { it.provider == "tencent_tmt" && it.configured }
+    val llmConfigured = providers.any { it.provider !in AiConfigRepository.MT_PROVIDERS && it.configured }
+    val tmtConfigured = providers.any { it.provider in AiConfigRepository.MT_PROVIDERS && it.configured }
     val showTmtHint = llmConfigured && !tmtConfigured
 
     Column(
@@ -363,7 +363,7 @@ fun SettingsScreen(onOpenApiConfig: () -> Unit, vm: SettingsViewModel = viewMode
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "💡 当前由大模型进行总结和翻译。配置腾讯云 TMT 机器翻译后，" +
+                        "💡 当前由大模型进行总结和翻译。配置腾讯云 TMT 或百度翻译等机器翻译后，" +
                             "标题翻译将分流至机翻，可降低大模型 tokens 消耗 →",
                         fontSize = 12.sp,
                         color = AmAccent,
@@ -466,7 +466,7 @@ fun SettingsScreen(onOpenApiConfig: () -> Unit, vm: SettingsViewModel = viewMode
             Divider(color = AmDivider)
             SettingRow("开源项目", "学术晨报 Academic Morning")
             Divider(color = AmDivider)
-            SettingRow("版本", "Beta 2.3.0")
+            SettingRow("版本", "Beta 2.5.0")
             Divider(color = AmDivider)
             SettingRow("许可证", "GPL-3.0 · 本地优先 · 零账号 · 数据不出手机")
         }
