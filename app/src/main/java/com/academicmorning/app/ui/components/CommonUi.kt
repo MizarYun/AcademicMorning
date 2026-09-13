@@ -84,6 +84,8 @@ fun TagChip(text: String, color: Color, filled: Boolean = false) {
 @Composable
 fun JournalRow(
     journal: Journal,
+    freqLabel: String? = null,
+    typeLabel: String? = null,
     onToggleFollow: () -> Unit
 ) {
     Row(
@@ -93,12 +95,20 @@ fun JournalRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(
-                journal.name,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    journal.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                // 自动识别出的期刊类型标注（周刊/半月刊/月刊/双月刊/半年刊）
+                if (!typeLabel.isNullOrBlank()) {
+                    Spacer(Modifier.width(6.dp))
+                    TagChip(typeLabel, AmAccent)
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -113,6 +123,11 @@ fun JournalRow(
                     Spacer(Modifier.width(6.dp))
                     Text("昨日发文 ${journal.yesterdayCount} 篇", style = MaterialTheme.typography.bodySmall)
                 }
+            }
+            // 更新周期标注（半月刊/月刊/双月刊 + 常见更新日）
+            if (!freqLabel.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(freqLabel, fontSize = 11.sp, color = AmAccent)
             }
         }
         Spacer(Modifier.width(8.dp))
