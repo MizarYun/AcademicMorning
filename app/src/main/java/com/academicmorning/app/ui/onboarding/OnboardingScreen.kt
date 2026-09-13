@@ -276,12 +276,12 @@ private fun Step3Api(vm: OnboardingViewModel) {
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(12.dp))
-            val llmConfigured = providers.any { it.provider != "tencent_tmt" && it.configured }
-            val tmtConfigured = providers.any { it.provider == "tencent_tmt" && it.configured }
+            val llmConfigured = providers.any { it.provider !in AiConfigRepository.MT_PROVIDERS && it.configured }
+            val tmtConfigured = providers.any { it.provider in AiConfigRepository.MT_PROVIDERS && it.configured }
             if (llmConfigured && !tmtConfigured) {
                 AmCard(Modifier.fillMaxWidth()) {
                     Text(
-                        "💡 当前由大模型进行总结和翻译。建议再配置腾讯云 TMT 机器翻译，" +
+                        "💡 当前由大模型进行总结和翻译。建议再配置腾讯云 TMT 或百度翻译等机器翻译，" +
                             "标题翻译将分流至机翻，可降低大模型 tokens 消耗。",
                         fontSize = 12.sp, color = AmAccent, lineHeight = 17.sp
                     )
@@ -340,15 +340,17 @@ private fun ProviderConfigCard(
         }
         if (expanded) {
             Spacer(Modifier.height(8.dp))
-            if (status.provider == "tencent_tmt") {
+            if (status.provider in AiConfigRepository.MT_PROVIDERS) {
+                val idLabel = if (status.provider == "baidu_translate") "APP ID" else "SecretId"
+                val keyLabel = if (status.provider == "baidu_translate") "密钥" else "SecretKey"
                 OutlinedTextField(
                     value = secretId, onValueChange = { secretId = it },
-                    label = { Text("SecretId") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                    label = { Text(idLabel) }, modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
                 Spacer(Modifier.height(6.dp))
                 OutlinedTextField(
                     value = secretKey, onValueChange = { secretKey = it },
-                    label = { Text("SecretKey") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                    label = { Text(keyLabel) }, modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
             } else {
                 OutlinedTextField(
@@ -360,7 +362,7 @@ private fun ProviderConfigCard(
             Row {
                 Button(
                     onClick = {
-                        if (status.provider == "tencent_tmt") vm.saveTencentKeys(secretId, secretKey)
+                        if (status.provider in AiConfigRepository.MT_PROVIDERS) vm.saveMtKeys(status.provider, secretId, secretKey)
                         else vm.saveKey(status.provider, keyInput)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AmPrimary),
