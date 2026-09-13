@@ -240,9 +240,44 @@ fun HomeScreen(
 
             if (papers.isEmpty()) {
                 item {
-                    EmptyState(
-                        "暂无符合条件的论文\n\n点击右上角「发表时间选择」，\n自选期刊与日期范围（最多 7 天）检索新发布，\n自动与本地记录去重"
-                    )
+                    val selectedJournal = journals.firstOrNull { it.issn == journalFilter }
+                    if (selectedJournal != null) {
+                        // 指定期刊下无内容（如月刊当月未更新）→ 提供"检索上一期"入口
+                        Column(
+                            Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "《${selectedJournal.name}》暂无近期论文\n（可能为月刊/双月刊，尚未到新一期更新时间）",
+                                fontSize = 13.sp, color = AmTextTertiary, lineHeight = 19.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    vm.fetchLastIssue(selectedJournal.issn, selectedJournal.name)
+                                },
+                                enabled = !refreshing,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                if (refreshing) {
+                                    CircularProgressIndicator(
+                                        Modifier.size(16.dp), strokeWidth = 2.dp, color = AmPrimary
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                }
+                                Text(
+                                    if (refreshing) "检索中…"
+                                    else "检索《${selectedJournal.name}》上一期发布的内容",
+                                    color = AmPrimary, fontSize = 13.sp
+                                )
+                            }
+                        }
+                    } else {
+                        EmptyState(
+                            "暂无符合条件的论文\n\n点击右上角「发表时间选择」，\n自选期刊与日期范围（最多 31 天）检索新发布，\n自动与本地记录去重"
+                        )
+                    }
                 }
             } else {
                 grouped.forEach { (date, list) ->
@@ -309,7 +344,7 @@ fun HomeScreen(
         val spanDays = (toDate.toEpochDay() - fromDate.toEpochDay() + 1).toInt()
         val rangeError = when {
             toDate.isBefore(fromDate) -> "结束日期不能早于开始日期"
-            spanDays > 7 -> "时间跨度最多 7 天（当前 $spanDays 天）"
+            spanDays > 31 -> "时间跨度最多 31 天，约一个月（当前 $spanDays 天）"
             toDate.isAfter(LocalDate.now()) -> "结束日期不能晚于今天"
             else -> null
         }
@@ -332,7 +367,7 @@ fun HomeScreen(
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    Text("日期范围（最多 7 天）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("日期范围（最多 31 天，约一个月）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { pickingFrom = true }, modifier = Modifier.weight(1f)) {
