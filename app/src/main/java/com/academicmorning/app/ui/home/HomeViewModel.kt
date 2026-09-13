@@ -118,6 +118,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 检索指定期刊上一期（回溯最近 31 天）。 */
+    fun fetchLastIssue(issn: String, journalName: String) {
+        if (_refreshing.value) return
+        viewModelScope.launch {
+            _refreshing.value = true
+            try {
+                val n = paperRepo.fetchLastIssue(issn)
+                _refreshMessage.value = if (n > 0) "已检索到《$journalName》上一期 $n 篇论文"
+                    else "近 31 天未检索到《$journalName》的新发表论文"
+            } catch (e: Exception) {
+                _refreshMessage.value = "抓取失败：${e.message}"
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
     fun clearMessage() { _refreshMessage.value = null }
 
     fun unfavorite(paper: Paper) = viewModelScope.launch {

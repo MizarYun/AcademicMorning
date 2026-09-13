@@ -70,12 +70,12 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
     val testResults = MutableStateFlow<Map<String, String>>(emptyMap())
 
     fun saveKey(provider: String, key: String) = viewModelScope.launch {
-        if (provider == "tencent_tmt") return@launch
+        if (provider in AiConfigRepository.MT_PROVIDERS) return@launch
         aiRepo.saveKey(provider, key)
     }
 
-    fun saveTencentKeys(id: String, key: String) = viewModelScope.launch {
-        aiRepo.saveTencentKeys(id, key)
+    fun saveMtKeys(provider: String, id: String, key: String) = viewModelScope.launch {
+        aiRepo.saveMtKeys(provider, id, key)
     }
 
     fun testConnection(provider: String) = viewModelScope.launch {
