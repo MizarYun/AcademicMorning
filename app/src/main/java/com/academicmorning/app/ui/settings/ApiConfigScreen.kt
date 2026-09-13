@@ -72,8 +72,8 @@ class ApiConfigViewModel(application: Application) : AndroidViewModel(applicatio
         aiRepo.saveKey(provider, key)
     }
 
-    fun saveTencentKeys(id: String, key: String) = viewModelScope.launch {
-        aiRepo.saveTencentKeys(id, key)
+    fun saveMtKeys(provider: String, id: String, key: String) = viewModelScope.launch {
+        aiRepo.saveMtKeys(provider, id, key)
     }
 
     fun removeKey(provider: String) = viewModelScope.launch {
@@ -121,12 +121,12 @@ fun ApiConfigScreen(onBack: () -> Unit, vm: ApiConfigViewModel = viewModel()) {
             )
             Spacer(Modifier.height(10.dp))
             // 大模型已配置但 TMT 未配置 → token 节省提示
-            val llmConfigured = providers.any { it.provider != "tencent_tmt" && it.configured }
-            val tmtConfigured = providers.any { it.provider == "tencent_tmt" && it.configured }
+            val llmConfigured = providers.any { it.provider !in AiConfigRepository.MT_PROVIDERS && it.configured }
+            val tmtConfigured = providers.any { it.provider in AiConfigRepository.MT_PROVIDERS && it.configured }
             if (llmConfigured && !tmtConfigured) {
                 AmCard(Modifier.fillMaxWidth()) {
                     Text(
-                        "💡 提示：当前由大模型进行总结和翻译。配置腾讯云 TMT 机器翻译后，" +
+                        "💡 提示：当前由大模型进行总结和翻译。配置腾讯云 TMT 或百度翻译等机器翻译后，" +
                             "论文标题翻译将分流至机翻通道，大模型只处理摘要与核心提炼，" +
                             "可显著降低大模型 tokens 消耗。",
                         fontSize = 12.sp,
@@ -195,15 +195,17 @@ private fun ProviderCard(
             }
         }
         Spacer(Modifier.height(8.dp))
-        if (status.provider == "tencent_tmt") {
+        if (status.provider in AiConfigRepository.MT_PROVIDERS) {
+            val idLabel = if (status.provider == "baidu_translate") "APP ID" else "SecretId"
+            val keyLabel = if (status.provider == "baidu_translate") "密钥" else "SecretKey"
             OutlinedTextField(
                 value = secretId, onValueChange = { secretId = it },
-                label = { Text("SecretId") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                label = { Text(idLabel) }, modifier = Modifier.fillMaxWidth(), singleLine = true
             )
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = secretKey, onValueChange = { secretKey = it },
-                label = { Text("SecretKey") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                label = { Text(keyLabel) }, modifier = Modifier.fillMaxWidth(), singleLine = true
             )
         } else {
             OutlinedTextField(
@@ -216,9 +218,9 @@ private fun ProviderCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(
                 onClick = {
-                    if (status.provider == "tencent_tmt") {
+                    if (status.provider in AiConfigRepository.MT_PROVIDERS) {
                         if (secretId.isNotBlank() && secretKey.isNotBlank()) {
-                            vm.saveTencentKeys(secretId, secretKey)
+                            vm.saveMtKeys(status.provider, secretId, secretKey)
                         }
                     } else if (keyInput.isNotBlank()) {
                         vm.saveKey(status.provider, keyInput)
