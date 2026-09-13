@@ -13,6 +13,7 @@ import com.academicmorning.app.data.remote.crossref.CrossrefClient
 import com.academicmorning.app.data.remote.llm.OpenAiCompatClient
 import com.academicmorning.app.data.remote.llm.TranslationResult
 import com.academicmorning.app.data.remote.pubmed.PubMedClient
+import com.academicmorning.app.data.remote.baidu.BaiduTranslateClient
 import com.academicmorning.app.data.remote.tmt.TencentTmtClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +30,8 @@ class PaperRepository(
     private val db: AppDatabase,
     private val settings: SettingsManager,
     private val keyStore: ApiKeyStore,
-    private val context: Context
+    private val context: Context,
+    private val journalRepo: JournalRepository
 ) {
     private val crossref = CrossrefClient()
     private val pubmed = PubMedClient()
@@ -64,20 +66,30 @@ class PaperRepository(
 
     /** 期刊回顾：抓指定期刊（null=全部关注期刊）最近 n 天（n≤7）。 */
     suspend fun refreshReview(journalIssn: String?, days: Int): Int {
-        val n = days.coerceIn(1, 7)
+        val n = days.coerceIn(1, 31)
         return refresh(rangeDays = n, onlyIssn = journalIssn)
     }
 
-    /** 指定日期范围抓取（yyyy-MM-dd，跨度最大 7 天，自动截断）。 */
+    /** 指定日期范围抓取（yyyy-MM-dd，跨度最大 31 天，自动截断）。 */
     suspend fun refreshRange(fromDate: String, toDate: String, journalIssn: String?): Int {
         val from = runCatching { dateFormat().parse(fromDate) }.getOrNull() ?: return 0
         val to = runCatching { dateFormat().parse(toDate) }.getOrNull() ?: return 0
         if (to.before(from)) return 0
         val spanDays = ((to.time - from.time) / (24 * 3600 * 1000)).toInt() + 1
-        val capped = spanDays.coerceAtMost(7)
-        // 若跨度超 7 天，从 toDate 向前截断
+        val capped = spanDays.coerceAtMost(31)
+        // 若跨度超 31 天，从 toDate 向前截断
         val cal = Calendar.getInstance().apply { time = to; add(Calendar.DAY_OF_YEAR, -(capped - 1)) }
         return refresh(dateFormat().format(cal.time), dateFormat().format(to), journalIssn)
+    }
+
+    /**
+     * 检索指定期刊的上一期：默认回溯 31 天；
+     * 已识别为双月刊的回溯 62 天、半年刊回溯 183 天（仅这两类放宽）。
+     */
+    suspend fun fetchLastIssue(journalIssn: String): Int {
+        val freqDays = db.journalDao().getByIssn(journalIssn)?.freqDays ?: 0
+        val lookback = JournalRepository.widenedLookbackDays(freqDays) ?: 31
+        return refresh(daysAgoString(lookback), todayString(), journalIssn)
     }
 
     /** 清理 30 天前的非收藏论文（收藏永久保留，链接随时可访问）。 */
@@ -102,6 +114,14 @@ class PaperRepository(
         var journals = db.journalDao().getFollowedOnce()
         if (onlyIssn != null) journals = journals.filter { it.issn == onlyIssn }
         if (journals.isEmpty()) return 0
+        // 抓取前自动识别尚未识别出刊周期的期刊（结果缓存到 journals.freqDays），
+        // 使双月刊/半年刊的检索窗口放宽立即生效
+        journals = journals.map { j ->
+            if (j.freqDays == 0) {
+                val fd = try { journalRepo.detectFrequency(j.issn) } catch (_: Exception) { 0 }
+                if (fd != 0) j.copy(freqDays = fd) else j
+            } else j
+        }
         val today = todayString()
         val rangeDays = runCatching {
             val f = dateFormat().parse(fromDate)!!.time
@@ -110,23 +130,33 @@ class PaperRepository(
         }.getOrDefault(1)
 
         // 1. 抓取（单期刊失败不影响整体）
+        //    检索窗口按期刊出刊周期自动放宽：仅识别为双月刊的期刊放宽到 62 天、
+        //    半年刊放宽到 183 天；其余期刊严格使用调用方给定窗口，避免高频刊
+        //    （如 Journal of Hazardous Materials）拉到几个月前的旧文。
         val ifByIssn = journals.associate { it.issn to it.impactFactor }
         val raw = mutableListOf<RawPaper>()
         for (j in journals) {
             try {
+                val widened = JournalRepository.widenedLookbackDays(j.freqDays)
+                val jFrom = if (widened != null) {
+                    val t = dateFormat().parse(toDate)!!.time
+                    val w = dateFormat().format(Date(t - (widened - 1L) * 24 * 3600 * 1000))
+                    if (w < fromDate) w else fromDate
+                } else fromDate
                 val items = when (j.source) {
-                    "pubmed" -> pubmed.fetchByJournal(j.sourceRef, fromDate, toDate, j.name, j.issn)
-                    "arxiv" -> arxiv.fetchByCategory(j.sourceRef, fromDate, toDate, j.name, j.issn)
-                    else -> crossref.fetchByIssn(j.sourceRef, fromDate, toDate, j.name)
+                    "pubmed" -> pubmed.fetchByJournal(j.sourceRef, jFrom, toDate, j.name, j.issn)
+                    "arxiv" -> arxiv.fetchByCategory(j.sourceRef, jFrom, toDate, j.name, j.issn)
+                    else -> crossref.fetchByIssn(j.sourceRef, jFrom, toDate, j.name,
+                        rows = if (widened != null) 60 else 30)
                 }
-                raw.addAll(items.take(if (rangeDays > 1) 40 else 20))
+                raw.addAll(items.take(if (widened != null || rangeDays > 7) 100 else if (rangeDays > 1) 40 else 20))
             } catch (e: Exception) {
                 Log.w("PaperRepository", "fetch failed: ${j.name}: ${e.message}")
             }
         }
 
         // 2. 批次内去重 + 总量截断（按期刊 IF 降序）
-        val cap = if (rangeDays > 1) 120 else 60
+        val cap = if (rangeDays > 7) 300 else if (rangeDays > 1) 120 else 60
         val deduped = raw.distinctBy { it.stableId() }
             .sortedByDescending { ifByIssn[it.journalIssn] ?: 0.0 }
             .take(cap)
@@ -191,12 +221,36 @@ class PaperRepository(
         return TencentTmtClient(id, key)
     }
 
-    /** 当前已配置的翻译能力：first=大模型可用，second=TMT 机翻可用。 */
+    private fun baiduClientOrNull(): BaiduTranslateClient? {
+        val id = keyStore.getKey("baidu_translate_app_id") ?: return null
+        val key = keyStore.getKey("baidu_translate_secret_key") ?: return null
+        return BaiduTranslateClient(id, key)
+    }
+
+    /** 当前激活的机器翻译通道（腾讯 TMT 或百度翻译）。 */
+    private suspend fun activeMt(): String? {
+        val mt = settings.activeMtProvider.first() ?: return null
+        return when (mt) {
+            "tencent_tmt" -> if (tmtClientOrNull() != null) mt else null
+            "baidu_translate" -> if (baiduClientOrNull() != null) mt else null
+            else -> null
+        }
+    }
+
+    /** 机翻统一入口。 */
+    private suspend fun machineTranslate(text: String): String {
+        return when (activeMt()) {
+            "baidu_translate" -> baiduClientOrNull()!!.translateEnToZh(text)
+            else -> tmtClientOrNull()?.translateEnToZh(text) ?: throw Exception("未配置机器翻译")
+        }
+    }
+
+    /** 当前已配置的翻译能力：first=大模型可用，second=机翻（腾讯 TMT 或百度）可用。 */
     suspend fun configuredEngines(): Pair<Boolean, Boolean> {
         val provider = settings.activeLlmProvider.first()
         val llmConfigured = provider != null && keyStore.hasKey(provider)
-        val tmtConfigured = settings.tmtEnabled.first() && tmtClientOrNull() != null
-        return llmConfigured to tmtConfigured
+        val mtConfigured = activeMt() != null
+        return llmConfigured to mtConfigured
     }
 
     /**
@@ -221,10 +275,10 @@ class PaperRepository(
                     true
                 }
                 "tmt" -> {
-                    val tmt = tmtClientOrNull() ?: return false
-                    val titleZh = withRateLimitRetry(id) { tmt.translateEnToZh(paper.title) }
+                    if (activeMt() == null) return false
+                    val titleZh = withRateLimitRetry(id) { machineTranslate(paper.title) }
                     val abstractZh = paper.abstractText?.take(1800)?.let {
-                        try { withRateLimitRetry(id) { tmt.translateEnToZh(it) } } catch (e: Exception) { null }
+                        try { withRateLimitRetry(id) { machineTranslate(it) } } catch (e: Exception) { null }
                     }
                     db.paperDao().updateTranslation(id, titleZh, abstractZh, null, System.currentTimeMillis())
                     true
